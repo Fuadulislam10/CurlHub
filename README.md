@@ -1,9 +1,7 @@
 ```md
 # CurlHub 🚀  
 **Public Web Recon & Learning Toolkit**
-
 CurlHub is a learning-focused web reconnaissance tool designed to extract **publicly accessible** URLs, parameters, paths, JavaScript endpoints, and historical URLs using Wayback/Common Crawl data.
-
 It is built for **education, practice, and experience** in web reconnaissance and bug bounty methodology.
 
 > ⚠️ CurlHub does NOT bypass authentication, access private/local files, or perform any illegal activity.
