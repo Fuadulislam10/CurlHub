@@ -1,45 +1,78 @@
 #!/bin/bash
 
-if [ -z "$1" ]; then
-  echo "Usage: ./curlhub.sh https://example.com"
+while getopts "l:" opt; do
+  case $opt in
+    l) LIST=$OPTARG ;;
+    *) echo "Usage: $0 -l domains.txt"; exit 1 ;;
+  esac
+done
+
+if [ -z "$LIST" ]; then
+  echo "[-] Domain list required"
   exit 1
 fi
 
-TARGET=$1
-DOMAIN=$(echo $TARGET | sed 's~https\?://~~' | sed 's~/.*~~')
 OUT=output
-
 mkdir -p $OUT
 > $OUT/urls.txt
 > $OUT/parameters.txt
 > $OUT/paths.txt
 > $OUT/js_endpoints.txt
-> $OUT/wayback_urls.txt
+> $OUT/alive.txt
 
-echo "[+] Fetching live HTML..."
-HTML=$(curl -Ls $TARGET)
+echo "[+] Running CurlHub v2"
 
-echo "[+] Extracting live URLs..."
-echo "$HTML" | grep -oP '(?<=href=")[^"]+' >> $OUT/urls.txt
+cat $LIST | while read domain; do
+  echo "[*] Processing $domain"
 
-echo "[+] Extracting parameters..."
-echo "$HTML" | grep -oP '\?[a-zA-Z0-9_-]+=' | sed 's/[?=]//g' >> $OUT/parameters.txt
+  # Live URLs
+  curl -Ls https://$domain |
+    grep -oP '(?<=href=")[^"]+' >> $OUT/urls.txt
 
-echo "[+] Extracting paths..."
-echo "$HTML" | grep -oP '/(api|v1|v2|admin|user)[^" ]*' >> $OUT/paths.txt
-
-echo "[+] Fetching Wayback + CommonCrawl URLs using gau..."
-gau $DOMAIN >> $OUT/wayback_urls.txt
-
-echo "[+] Extracting JS endpoints from Wayback URLs..."
-grep '\.js' $OUT/wayback_urls.txt | sort -u | while read js; do
-  curl -s "$js" | grep -oP '["'\''](/api/[^"'\'']+)["'\'']' \
-  | tr -d '"' | tr -d "'" >> $OUT/js_endpoints.txt
+  # Wayback + Common Crawl
+  gau $domain >> $OUT/urls.txt
 done
 
-echo "[+] Cleaning & sorting output..."
-for f in $OUT/*.txt; do
-  sort -u $f -o $f
+# Parameters
+grep -oP '\?[a-zA-Z0-9_-]+=' $OUT/urls.txt |
+  sed 's/[?=]//g' >> $OUT/parameters.txt
+
+# Paths
+grep -oP '/(api|v1|v2|admin|user)[^" ]*' $OUT/urls.txt >> $OUT/paths.txt
+
+# Threaded JS parsing
+echo "[+] Parsing JS files (threaded)"
+grep '\.js' $OUT/urls.txt | sort -u |
+  xargs -n 1 -P 10 curl -s |
+  grep -oP '["'\''](/api/[^"'\'']+)["'\'']' |
+  tr -d '"' | tr -d "'" >> $OUT/js_endpoints.txt
+
+# Alive check
+echo "[+] Checking alive endpoints"
+cat $OUT/paths.txt $OUT/js_endpoints.txt | sort -u |
+while read url; do
+  code=$(curl -o /dev/null -s -w "%{http_code}" "$url")
+  if [[ "$code" == "200" || "$code" == "302" ]]; then
+    echo "$url [$code]" >> $OUT/alive.txt
+  fi
 done
 
-echo "[✔] Done! Results saved in /output"
+# JSON output
+echo "[+] Generating JSON output"
+jq -n \
+  --argfile urls <(jq -R . $OUT/urls.txt | jq -s .) \
+  --argfile params <(jq -R . $OUT/parameters.txt | jq -s .) \
+  --argfile paths <(jq -R . $OUT/paths.txt | jq -s .) \
+  --argfile js <(jq -R . $OUT/js_endpoints.txt | jq -s .) \
+  --argfile alive <(jq -R . $OUT/alive.txt | jq -s .) \
+  '{
+    urls: $urls,
+    parameters: $params,
+    paths: $paths,
+    js_endpoints: $js,
+    alive: $alive
+  }' > $OUT/results.json
+
+for f in $OUT/*.txt; do sort -u $f -o $f; done
+
+echo "[✔] CurlHub v2 finished"
