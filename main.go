@@ -5,6 +5,7 @@ import (
 	"os"
 	"curlhub/crawler"
 	"curlhub/extractor"
+	"bufio"
 )
 
 func banner() {
@@ -17,20 +18,21 @@ func banner() {
  ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 
         CurlHub (Go Edition)
-`)
-}
+		
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("Usage: ./curlhub https://example.com")
+	if len(os.Args) != 3 || os.Args[1] != "-l" {
+		fmt.Println("Usage: ./curlhub -l domains.txt")
 		return
 	}
 
-	target := os.Args[1]
-	banner()
+	file, _ := os.Open(os.Args[2])
+	defer file.Close()
 
-	html := crawler.Fetch(target)
-	extractor.ExtractAll(html)
-
-	fmt.Println("[+] Recon completed. Check /output")
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		domain := scanner.Text()
+		RunWayback(domain)
+	}
 }
+
