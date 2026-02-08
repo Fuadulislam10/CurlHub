@@ -3,8 +3,8 @@ Pubilc Web Asset &amp; Parameter Discovery Tool (Learning Purpose)
 
 🎯 What CurlHub Does
 CurlHub extracts publicly accessible data from a target domain:
-**✅ Features**
-Crawl URLs & paths
+# **✅ Features**
+[ Crawl URLs & paths ]
   **Extract:**
 Query parameters (?id=1&user=admin)
 Endpoints (/api/v1/users)
